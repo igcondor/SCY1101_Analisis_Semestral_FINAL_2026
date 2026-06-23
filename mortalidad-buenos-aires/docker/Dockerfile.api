@@ -1,0 +1,40 @@
+# =============================================================
+# Imagen de la API — FastAPI + Uvicorn
+# =============================================================
+FROM python:3.11-slim AS base
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        gcc libpq-dev curl \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN useradd --create-home --shell /bin/bash appuser
+
+# --- Stage builder ---
+FROM base AS builder
+COPY requirements.txt requirements-api.txt /app/
+RUN pip install --user -r requirements-api.txt
+
+# --- Stage runtime ---
+FROM base AS runtime
+COPY --from=builder /root/.local /home/appuser/.local
+COPY etl/ /app/etl/
+COPY api/ /app/api/
+RUN mkdir -p /app/data/models && chown -R appuser:appuser /app
+
+ENV PATH=/home/appuser/.local/bin:$PATH \
+    PORT=8000
+USER appuser
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD curl -fsS http://localhost:${PORT:-8000}/health || exit 1
+
+# Railway inyecta $PORT. Si no, usamos 8000.
+CMD ["sh", "-c", "uvicorn api.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
