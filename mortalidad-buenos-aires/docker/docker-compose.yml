@@ -1,0 +1,84 @@
+# =====================================================================
+# Stack local de desarrollo — Mortalidad Buenos Aires
+# Levanta: postgres + etl (job one-shot) + api + dashboard.
+# Equivalente lógico a Railway, pero ejecutable en una sola máquina.
+# =====================================================================
+services:
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: mortalidad_postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-mortalidad}
+      POSTGRES_USER: ${POSTGRES_USER:-mortalidad}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mortalidad}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mortalidad}"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  etl:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.etl
+    container_name: mortalidad_etl
+    environment:
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-mortalidad}:${POSTGRES_PASSWORD:-mortalidad}@postgres:5432/${POSTGRES_DB:-mortalidad}
+      CSV_PATH: /app/data/raw/defunciones-ocurridas-y-registradas-en-la-republica-argentina-entre-los-anos-2005-2022.csv
+      JURISDICCION_FOCO: ${JURISDICCION_FOCO:-Buenos Aires}
+      INDEC_API_URL: ${INDEC_API_URL:-https://apis.datos.gob.ar/series/api/series}
+      MODEL_DIR: /app/data/models
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOG_FORMAT: ${LOG_FORMAT:-json}
+    volumes:
+      - ../data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"   # job one-shot; relánzalo con `docker compose run etl`
+
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.api
+    container_name: mortalidad_api
+    environment:
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-mortalidad}:${POSTGRES_PASSWORD:-mortalidad}@postgres:5432/${POSTGRES_DB:-mortalidad}
+      MODEL_DIR: /app/data/models
+      DASHBOARD_ORIGIN: ${DASHBOARD_ORIGIN:-http://localhost:8501}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOG_FORMAT: ${LOG_FORMAT:-json}
+      PORT: 8000
+    volumes:
+      - ../data/models:/app/data/models:ro
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  dashboard:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.dashboard
+    container_name: mortalidad_dashboard
+    environment:
+      API_URL: http://api:8000
+      PORT: 8501
+    ports:
+      - "8501:8501"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local

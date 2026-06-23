@@ -1,0 +1,44 @@
+# =============================================================
+# Imagen del job ETL — corre como auto-seed idempotente.
+#
+# CMD ejecuta etl.bootstrap, que:
+#   1. Aplica init.sql si las tablas no existen.
+#   2. Si fact_defunciones está vacía, corre el ETL + entrena modelos.
+#   3. Si todo existe, sale 0 inmediato.
+# =============================================================
+FROM python:3.11-slim AS base
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
+WORKDIR /app
+
+# Dependencias del sistema (postgres driver, build tools livianos)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        gcc libpq-dev curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Usuario no-root
+RUN useradd --create-home --shell /bin/bash appuser
+
+# --- Stage builder: instala deps ---
+FROM base AS builder
+COPY requirements.txt requirements-etl.txt /app/
+RUN pip install --user -r requirements-etl.txt
+
+# --- Stage final ---
+FROM base AS runtime
+COPY --from=builder /root/.local /home/appuser/.local
+COPY etl/ /app/etl/
+# init.sql va al lado del código para que bootstrap.py lo encuentre.
+COPY docker/postgres/init.sql /app/init.sql
+COPY data/raw/.gitkeep /app/data/raw/.gitkeep
+RUN mkdir -p /app/data/models /app/data/raw && chown -R appuser:appuser /app
+
+ENV PATH=/home/appuser/.local/bin:$PATH
+USER appuser
+
+# Auto-seed: bootstrap idempotente que aplica schema + corre ETL + entrena.
+# Se ejecuta cada vez que Fly arranca una máquina nueva del servicio etl.
+CMD ["python", "-m", "etl.bootstrap"]

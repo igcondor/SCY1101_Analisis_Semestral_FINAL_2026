@@ -1,0 +1,51 @@
+# =====================================================================
+# Fly.io — servicio Dashboard (Streamlit)
+# Habla con la API vía DNS interno mortalidad-api.internal:8000
+# =====================================================================
+
+app            = "mortalidad-dashboard"
+primary_region = "gru"
+kill_signal    = "SIGINT"
+kill_timeout   = "10s"
+
+[build]
+  dockerfile = "../docker/Dockerfile.dashboard"
+
+[env]
+  PORT     = "8501"
+  # Usamos la URL pública en vez de mortalidad-api.internal por dos razones:
+  # 1. Fly auto-start solo se dispara contra el edge proxy (.fly.dev), no .internal.
+  #    Con auto_stop_machines="stop" + min_machines_running=0, .internal puede caer
+  #    en una máquina parada y devolver "Connection refused" (errno 111).
+  # 2. La edge dirige al machine healthy automáticamente (HA invisible).
+  # Penalty: ~80ms extra por request (negligible para defensa académica).
+  API_URL  = "https://mortalidad-api.fly.dev"
+  STREAMLIT_SERVER_HEADLESS            = "true"
+  STREAMLIT_BROWSER_GATHER_USAGE_STATS = "false"
+
+[http_service]
+  internal_port       = 8501
+  force_https         = true
+  auto_stop_machines  = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+  processes           = ["app"]
+
+  [http_service.concurrency]
+    type       = "connections"
+    soft_limit = 80
+    hard_limit = 100
+
+[[vm]]
+  size   = "shared-cpu-1x"
+  memory = "512mb"
+
+[checks]
+  [checks.health]
+    type     = "http"
+    port     = 8501
+    method   = "get"
+    path     = "/_stcore/health"
+    interval = "30s"
+    timeout  = "5s"
+    grace_period = "20s"

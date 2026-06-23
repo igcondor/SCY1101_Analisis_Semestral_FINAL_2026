@@ -1,0 +1,67 @@
+name: Fly Sync & Deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'api/**'
+      - 'dashboards/**'
+      - 'etl/**'
+      - 'docker/**'
+      - 'fly/**'
+      - 'scripts/fly-init.sh'
+      - 'scripts/upload_csv_to_tigris.py'
+      - 'requirements*.txt'
+      - 'pyproject.toml'
+      - '.github/workflows/fly-deploy.yml'
+  workflow_dispatch:
+    inputs:
+      force_reset_secrets:
+        description: 'Force reset all secrets (FORCE_RESET_SECRETS=1)'
+        type: boolean
+        default: false
+
+concurrency:
+  group: fly-sync-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    name: Reconciliar estado + desplegar
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Expose 'fly' as alias of 'flyctl'
+        run: |
+          if ! command -v fly >/dev/null 2>&1; then
+            sudo ln -s "$(command -v flyctl)" /usr/local/bin/fly
+          fi
+          fly version
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install boto3
+        run: pip install --quiet boto3
+
+      - name: Sync state and deploy
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          FORCE_RESET_SECRETS: ${{ inputs.force_reset_secrets && '1' || '0' }}
+        run: ./scripts/fly-init.sh
+
+      - name: Smoke test
+        run: |
+          set -e
+          echo "=== API ==="
+          curl -fsS --max-time 30 https://mortalidad-api.fly.dev/health
+          echo
+          curl -fsS --max-time 30 https://mortalidad-api.fly.dev/ready
+          echo
+          echo "=== Dashboard ==="
+          curl -fsS --max-time 30 -o /dev/null -w "HTTP %%{http_code}\n" \
+              https://mortalidad-dashboard.fly.dev/

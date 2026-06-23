@@ -1,0 +1,34 @@
+# =====================================================================
+# Fly.io — servicio ETL (job one-shot, sin HTTP público)
+#
+# El CSV se descarga desde Tigris (S3-compatible) via CSV_URL, así que ya
+# no necesita volumen persistente. Cache local en /tmp del contenedor.
+#
+# Se invoca con:
+#   fly machine run --app mortalidad-etl . -e python -m etl.main
+#   fly machine run --app mortalidad-etl . -e python -m etl.train_models
+# =====================================================================
+
+app            = "mortalidad-etl"
+primary_region = "gru"
+
+[build]
+  dockerfile = "../docker/Dockerfile.etl"
+
+[env]
+  LOG_LEVEL    = "INFO"
+  LOG_FORMAT   = "json"
+  MODEL_DIR    = "/tmp/models"
+  # CSV_URL apunta al objeto en Tigris. Lo inyecta `fly storage create` con
+  # BUCKET_NAME; el script de init lo combina como s3://$BUCKET_NAME/defunciones.csv
+  # y lo setea como secret en esta app.
+  # Credenciales AWS_* también las inyecta Tigris automáticamente.
+
+# Sin [http_service]: este servicio no expone puertos públicos.
+# Sigue siendo alcanzable internamente como mortalidad-etl.internal si se necesitara.
+
+# Sin [[mounts]]: ya no usamos volumen Fly. El CSV vive en Tigris.
+
+[[vm]]
+  size   = "shared-cpu-1x"
+  memory = "2gb"   # pandas + sklearn + entrenamiento ML necesitan ≥2GB
