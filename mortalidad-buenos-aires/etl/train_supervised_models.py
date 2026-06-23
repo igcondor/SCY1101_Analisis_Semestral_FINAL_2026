@@ -39,10 +39,10 @@ from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from sklearn.metrics import accuracy_score, f1_score, mean_absolute_error, r2_score
 from sklearn.model_selection import (
-    GridSearchCV, 
-    KFold, 
-    StratifiedKFold, 
-    cross_val_score, 
+    GridSearchCV,
+    KFold,
+    StratifiedKFold,
+    cross_val_score,
     train_test_split)
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, OrdinalEncoder, StandardScaler
