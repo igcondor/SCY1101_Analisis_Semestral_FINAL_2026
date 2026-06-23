@@ -1,34 +1,27 @@
-from sklearn.preprocessing import MinMaxScaler, StandardScaler, LabelEncoder, OneHotEncoder, OrdinalEncoder
+"""Feature engineering: clasificación CIE-10 y encodings para ML."""
+import logging
+
+import pandas as pd
 from sklearn.compose import ColumnTransformer
+from sklearn.preprocessing import (
+    LabelEncoder,
+    MinMaxScaler,
+    OneHotEncoder,
+    OrdinalEncoder,
+    StandardScaler,
+)
+
+logger = logging.getLogger(__name__)
 
 
-def clasificar_cie10(codigo):
-  """Clasifica un código CIE-10 en su capítulo oficial según la OMS."""
-  if not isinstance(codigo, str) or len(codigo) < 1:
-    return "Desconocido"
-  letra = codigo[0]
-  # Caso especial D: distinguir por número
-  if letra == "D":
-    try:
-      num = int(codigo[1:3])
-      return "Neoplasias" if num <= 48 else "Sangre e inmunidad"
-    except:
-      return "Desconocido"
-
-  if letra == "H":
-    try:
-      num = int(codigo[1:3])
-      return "Enfermedades del ojo" if num <= 59 else "Enfermedades del oído"
-    except:
-      return "Desconocido"
-  mapa = {
+# Capítulos CIE-10 oficiales agrupados por inicial.
+CAPITULOS_CIE10: dict[str, str] = {
     "A": "Infecciosas y parasitarias",
     "B": "Infecciosas y parasitarias",
     "C": "Neoplasias",
     "E": "Endocrinas y metabólicas",
     "F": "Trastornos mentales",
     "G": "Sistema nervioso",
-    "H": "Ojo / Oído",    # H00-H95 cubre ambos
     "I": "Aparato circulatorio",
     "J": "Aparato respiratorio",
     "K": "Aparato digestivo",
@@ -47,43 +40,99 @@ def clasificar_cie10(codigo):
     "Y": "Causas externas",
     "Z": "Factores de salud",
     "U": "Códigos especiales",
-  }
-  return mapa.get(letra, "Desconocido")
+}
+
+ORDEN_EDAD: list[str] = [
+    "De a 0 a 14 anios",
+    "De 15 a 34 anios",
+    "De 35 a 54 anios",
+    "De 55 a 74 anios",
+    "De 75 anios y mas",
+]
 
 
-def transformacion_manual(df):
-    df_manual = df.copy()
+def clasificar_cie10(codigo: str | None) -> str:
+    """Asigna un capítulo CIE-10 al código.
 
-    ordenEdad = ['De a 0 a 14 anios','De 15 a 34 anios',
-                'De 35 a 54 anios','De 55 a 74 anios',
-                'De 75 anios y mas']
+    Casos especiales:
+        - ``D00-D48``: Neoplasias; ``D49+``: Sangre e inmunidad.
+        - ``H00-H59``: Enfermedades del ojo; ``H60+``: Enfermedades del oído.
 
-    le = LabelEncoder()
-    df_manual['cie10_clasificacion'] = le.fit_transform(df_manual['cie10_clasificacion'])
-    df_manual['Sexo'] = le.fit_transform(df_manual['Sexo'])
+    Args:
+        codigo: Código CIE-10 (p.ej. ``"I50"``).
 
-    # Se usa OrdinalEncoder para establecerle un orden a las variables ordinales
+    Returns:
+        Nombre del capítulo, o ``"Desconocido"`` si no se reconoce.
+    """
+    if not isinstance(codigo, str) or len(codigo) < 1:
+        return "Desconocido"
+    letra = codigo[0]
+    if letra == "D":
+        try:
+            num = int(codigo[1:3])
+            return "Neoplasias" if num <= 48 else "Sangre e inmunidad"
+        except ValueError:
+            return "Desconocido"
+    if letra == "H":
+        try:
+            num = int(codigo[1:3])
+            return "Enfermedades del ojo" if num <= 59 else "Enfermedades del oído"
+        except ValueError:
+            return "Desconocido"
+    return CAPITULOS_CIE10.get(letra, "Desconocido")
 
-    ordEdad = OrdinalEncoder(categories=[ordenEdad])
-    df_manual['grupo_edad'] = ordEdad.fit_transform(df_manual[['grupo_edad']])
+
+def agregar_supracategoria(df: pd.DataFrame) -> pd.DataFrame:
+    """Agrega la columna ``supracategoria`` con el capítulo CIE-10."""
+    out = df.copy()
+    out["supracategoria"] = out["cie10_causa_id"].apply(clasificar_cie10)
+    return out
 
 
-    mm_scaler = MinMaxScaler()
-    df_manual['anio'] = mm_scaler.fit_transform(df_manual[['anio']]) # No hace falta timestamp ya que esta solo el año, sin mes ni dia
-    df_manual['cantidad'] = mm_scaler.fit_transform(df_manual[['cantidad']])
+def transformacion_manual(df: pd.DataFrame) -> pd.DataFrame:
+    """Encoding manual + escalado MinMax para clustering / PCA.
 
-    # "jurisdicion_residencia_nombre"
-    df_manual = df_manual.drop(columns=["jurisdiccion_de_residencia_id", "sexo_id", 'cie10_causa_id', "jurisdicion_residencia_nombre"]).copy()
-    return df_manual
+    Se usa un ``LabelEncoder`` independiente por columna (bug histórico del
+    notebook original reusaba el mismo objeto, sobrescribiendo el fit).
+    """
+    out = df.copy()
+
+    le_cie = LabelEncoder()
+    out["cie10_clasificacion"] = le_cie.fit_transform(out["cie10_clasificacion"])
+
+    le_sexo = LabelEncoder()
+    out["Sexo"] = le_sexo.fit_transform(out["Sexo"])
+
+    ord_edad = OrdinalEncoder(categories=[ORDEN_EDAD])
+    out["grupo_edad"] = ord_edad.fit_transform(out[["grupo_edad"]])
+
+    mm = MinMaxScaler()
+    out["anio"] = mm.fit_transform(out[["anio"]])
+    out["cantidad"] = mm.fit_transform(out[["cantidad"]])
+
+    return out.drop(
+        columns=[
+            "jurisdiccion_de_residencia_id",
+            "sexo_id",
+            "cie10_causa_id",
+            "jurisdicion_residencia_nombre",
+        ],
+        errors="ignore",
+    )
 
 
-def transformacion_pipeline(df):
-    df_auto = df.copy()
+def transformacion_pipeline(df: pd.DataFrame):
+    """Pipeline sklearn con OneHot + StandardScaler.
 
-    pipeline = ColumnTransformer(transformers=[
-    ('cat', OneHotEncoder(), ["cie10_clasificacion", "Sexo", "grupo_edad"]),
-    ('num', StandardScaler(), ["anio", "cantidad"])
-    ])
-
-    X_transf = pipeline.fit_transform(df_auto)
-    return X_transf, pipeline
+    Returns:
+        Tupla ``(matriz_transformada, ColumnTransformer)``.
+    """
+    pipeline = ColumnTransformer(
+        transformers=[
+            ("cat", OneHotEncoder(handle_unknown="ignore"),
+             ["cie10_clasificacion", "Sexo", "grupo_edad"]),
+            ("num", StandardScaler(), ["anio", "cantidad"]),
+        ]
+    )
+    matrix = pipeline.fit_transform(df)
+    return matrix, pipeline
