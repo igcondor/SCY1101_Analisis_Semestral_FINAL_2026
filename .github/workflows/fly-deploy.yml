@@ -4,15 +4,15 @@ on:
   push:
     branches: [main]
     paths:
-      - 'api/**'
-      - 'dashboards/**'
-      - 'etl/**'
-      - 'docker/**'
-      - 'fly/**'
-      - 'scripts/fly-init.sh'
-      - 'scripts/upload_csv_to_tigris.py'
-      - 'requirements*.txt'
-      - 'pyproject.toml'
+      - 'mortalidad-buenos-aires/api/**'
+      - 'mortalidad-buenos-aires/dashboards/**'
+      - 'mortalidad-buenos-aires/etl/**'
+      - 'mortalidad-buenos-aires/docker/**'
+      - 'mortalidad-buenos-aires/fly/**'
+      - 'mortalidad-buenos-aires/scripts/fly-init.sh'
+      - 'mortalidad-buenos-aires/scripts/upload_csv_to_tigris.py'
+      - 'mortalidad-buenos-aires/requirements*.txt'
+      - 'mortalidad-buenos-aires/pyproject.toml'
       - '.github/workflows/fly-deploy.yml'
   workflow_dispatch:
     inputs:
@@ -25,6 +25,9 @@ concurrency:
   group: fly-sync-${{ github.ref }}
   cancel-in-progress: true
 
+defaults:
+  run:
+    working-directory: mortalidad-buenos-aires
 jobs:
   sync:
     name: Reconciliar estado + desplegar

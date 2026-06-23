@@ -198,7 +198,7 @@ def predict_grupo_edad(supracategoria: str, sexo: str, anio: int, cantidad: int)
     pred = clasificador.predict(entrada)[0]
     proba = clasificador.predict_proba(entrada)[0]
     clases = clasificador.classes_
-    probabilidades = {str(c): round(float(p), 4) for c, p in zip(clases, proba)}
+    probabilidades = {str(c): round(float(p), 4) for c, p in zip(clases, proba, strict=True)}
 
     return str(pred), probabilidades
 
