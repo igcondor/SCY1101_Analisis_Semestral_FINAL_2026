@@ -30,5 +30,5 @@ primary_region = "gru"
 # Sin [[mounts]]: ya no usamos volumen Fly. El CSV vive en Tigris.
 
 [[vm]]
-  size   = "shared-cpu-1x"
-  memory = "2gb"   # pandas + sklearn + entrenamiento ML necesitan ≥2GB
+  size   = "shared-cpu-2x"
+  memory = "4gb"   # pandas + sklearn + entrenamiento ML necesitan ≥2GB
