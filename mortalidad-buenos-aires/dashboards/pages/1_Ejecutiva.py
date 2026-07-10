@@ -114,32 +114,6 @@ if meta_sup:
     b1, b2 = st.columns(2)
     b1.metric("Precisión al clasificar el grupo etario de riesgo", f"{clf_acc*100:.0f}%")
     b2.metric("Capacidad explicativa de la siniestralidad esperada (R²)", f"{reg_r2:.2f}")
-
-    with st.expander("📝 Lectura de negocio — TODO: personalizar con tu propio análisis"):
-        st.markdown(
-            """
-            *Borrador inicial — antes de la defensa, ajusta este texto con tu propia
-            lectura; en la presentación individual te van a pedir que la justifiques tú.*
-
-            - El modelo de clasificación es razonablemente confiable para anticipar
-              **qué franja etaria concentrará el siniestro** dada una causa —
-              suficiente como insumo de **segmentación de riesgo para suscripción**
-              (ej. ajustar el cuestionario de salud o el recargo de prima según el
-              capítulo CIE-10 declarado), no como reemplazo de una tabla de
-              mortalidad certificada.
-            - El modelo de regresión da solo un **orden de magnitud** de la
-              siniestralidad esperada, no una cifra para calcular reservas: con
-              las variables actuales (año, sexo, grupo de edad, capítulo de causa)
-              no se captura la variabilidad real, que depende de la causa
-              específica y de variables que esta base no tiene (comorbilidades,
-              nivel socioeconómico, hábitos). Usarlo para pricing real sin
-              enriquecerlo sería subestimar el riesgo.
-            - *(Agrega aquí 1-2 frases: con esta información, ¿ajustarías primas,
-              reservas, o el apetito de riesgo de alguna línea de producto? ¿Qué
-              dato agregarías a la base para que el modelo sea utilizable en
-              producción?)*
-            """
-        )
 else:
     st.info(
         "Los modelos predictivos aún no están disponibles "

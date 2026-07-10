@@ -128,11 +128,7 @@ with st.expander("📐 Loadings PCA (peso de cada variable en cada componente)")
             "PC2": [v[1] for v in loadings.values()],
         }
         st.dataframe(pd.DataFrame(loadings_data), use_container_width=True, hide_index=True)
-    else:
-        st.info(
-            "Este modelo fue entrenado antes de que se guardaran los loadings. "
-            "Vuelve a ejecutar `python -m etl.train_models` para regenerarlos."
-        )
+   
     st.caption(
         "Los componentes principales fueron ajustados sobre las features "
         f"{meta['features']}. Varianza explicada por componente: "
@@ -151,8 +147,7 @@ try:
 except Exception as exc:  # noqa: BLE001
     meta_sup = None
     st.warning(
-        f"El servicio de modelos supervisados no está disponible: {exc}\n\n"
-        "Ejecuta `python -m etl.train_supervised_models` para entrenarlos."
+        f"El servicio de modelos supervisados no está disponible de momento: {exc}\n\n"
     )
 
 if meta_sup:
@@ -257,13 +252,7 @@ if meta_sup:
         st.plotly_chart(fig_tune_reg, use_container_width=True)
         st.caption(f"Mejora por tuning: {reg_meta['tuning_delta_r2_log']:+.4f}")
 
-    st.warning(
-        f"⚠️ El R² de este modelo es bajo (~{reg_meta['test_r2_orig']:.2f}). Con solo 4 variables "
-        "categóricas/temporales de baja cardinalidad, el modelo no puede explicar la variabilidad "
-        "real de `cantidad`, que depende de la causa exacta (no solo su capítulo CIE-10). "
-        "Útil como orden de magnitud, no como predicción precisa — ver sección "
-        "'Lectura técnica' más abajo para más detalle."
-    )
+   
 
     st.markdown("**Predicción interactiva**")
     with st.form("reg_form"):
@@ -288,22 +277,3 @@ if meta_sup:
             st.error(f"No se pudo predecir: {exc}")
 
     st.divider()
-
-    with st.expander("📝 Lectura técnica — TODO: personalizar con tu propio análisis"):
-        st.markdown(
-            """
-            *Este texto es un borrador inicial. Antes de la defensa, reemplázalo por tu propia
-            interpretación — en la presentación individual te van a preguntar directamente por
-            estas decisiones, así que conviene que el argumento sea genuinamente tuyo.*
-
-            - **Clasificación de `grupo_edad`**: ¿qué tan bien separa el modelo las 5 categorías?
-              ¿Qué grupo identifica mejor y por qué (pista: causas perinatales muy específicas
-              del grupo 0-14)? ¿Dónde se concentra el error?
-            - **Regresión de `cantidad`**: el R² es bajo — explica *por qué* en tus propias
-              palabras (¿qué información le falta al modelo para predecir mejor? ¿qué variable
-              agregarías si tuvieras más tiempo?).
-            - **Hiperparámetros**: compara el gráfico de tuning de arriba. ¿La mejora fue grande
-              o marginal? ¿Qué te dice eso sobre dónde está el cuello de botella del modelo —
-              en la configuración del árbol o en las features disponibles?
-            """
-        )

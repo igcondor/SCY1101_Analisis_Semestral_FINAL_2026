@@ -13,7 +13,7 @@ def test_ml_cluster_sin_modelos_devuelve_503(tmp_path, monkeypatch):
 
     client = TestClient(app)
     r = client.post("/ml/cluster", json={
-        "cie10_clasificacion": 1.0,
+        "supracategoria": "Aparato circulatorio",
         "sexo": 1.0,
         "grupo_edad": 2.0,
         "anio": 0.5,
@@ -30,7 +30,7 @@ def test_ml_pca_sin_modelos_devuelve_503(tmp_path, monkeypatch):
 
     client = TestClient(app)
     r = client.post("/ml/pca", json={
-        "cie10_clasificacion": 1.0, "sexo": 0.0, "grupo_edad": 2.0,
+        "supracategoria": "Aparato circulatorio", "sexo": 0.0, "grupo_edad": 2.0,
         "anio": 0.5, "cantidad": 0.1,
     })
     assert r.status_code == 503

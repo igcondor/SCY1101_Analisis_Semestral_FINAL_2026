@@ -22,7 +22,7 @@ with st.sidebar:
          "De 55 a 74 anios", "De 75 anios y mas"],
         index=0,
     )
-    supracat = st.text_input("Supracategoría CIE-10 (texto exacto)", value="")
+    supracat = st.text_input("Supracategoría CIE-10 (String exacto)", value="")
     limit = st.slider("Filas a mostrar", 50, 1000, 200, step=50)
 
 try:

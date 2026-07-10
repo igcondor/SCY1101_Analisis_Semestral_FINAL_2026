@@ -19,8 +19,14 @@ from api.schemas import (
 router = APIRouter(prefix="/ml", tags=["ml"])
 
 
-def _to_vector(req: ClusterRequest) -> list[float]:
-    return [req.cie10_clasificacion, req.sexo, req.grupo_edad, req.anio, req.cantidad]
+def _to_vector(req: ClusterRequest) -> dict:
+    return {
+        "supracategoria": req.supracategoria,
+        "Sexo": req.sexo,
+        "grupo_edad": req.grupo_edad,
+        "anio": req.anio,
+        "cantidad": req.cantidad,
+    }
 
 
 @router.post("/cluster", response_model=ClusterResponse)
