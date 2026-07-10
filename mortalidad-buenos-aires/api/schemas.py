@@ -61,7 +61,7 @@ class TasaMortalidadPoint(BaseModel):
 
 
 class ClusterRequest(BaseModel):
-    cie10_clasificacion: float = Field(..., description="Codificación numérica del capítulo.")
+    supracategoria: str = Field(..., description="Capítulo CIE-10 agregado, ej. 'Aparato circulatorio'.")
     sexo: float = Field(..., ge=0, le=1, description="0 = mujer, 1 = varón.")
     grupo_edad: float = Field(..., ge=0, le=4, description="Edad ordinal 0..4.")
     anio: float = Field(..., ge=0, le=1, description="Año escalado a [0, 1].")

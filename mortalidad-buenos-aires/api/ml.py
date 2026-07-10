@@ -12,10 +12,11 @@ import logging
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
-
+import pandas as pd
 import numpy as np
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
+
 
 from api.config import settings
 
@@ -92,15 +93,18 @@ def _load_models() -> tuple[KMeans, PCA, Any, list[str], dict]:
     return loaded
 
 
-def predict_cluster(values: list[float]) -> tuple[int, float]:
+def predict_cluster(values: dict) -> tuple[int, float]:
     """Predice cluster y distancia al centroide.
 
-    Aplica el mismo ``StandardScaler`` ajustado en entrenamiento antes de
-    llamar a ``kmeans.predict`` — el modelo fue entrenado sobre datos
-    escalados, así que un vector crudo daría una predicción inconsistente.
+    Aplica el mismo preprocesador (``OneHotEncoder`` + ``StandardScaler``)
+    ajustado en entrenamiento antes de llamar a ``kmeans.predict`` — el
+    modelo fue entrenado sobre datos transformados, así que un vector crudo
+    daría una predicción inconsistente.
     """
+
+
     kmeans, _, scaler, _, _ = _load_models()
-    X = np.array(values, dtype=float).reshape(1, -1)
+    X = pd.DataFrame([values])
     if scaler is not None:
         X = scaler.transform(X)
     label = int(kmeans.predict(X)[0])
@@ -109,11 +113,13 @@ def predict_cluster(values: list[float]) -> tuple[int, float]:
     return label, round(dist, 4)
 
 
-def predict_pca(values: list[float]) -> tuple[float, float]:
-    """Proyecta el vector (ya escalado con el mismo scaler de entrenamiento)
-    a 2 componentes principales."""
+def predict_pca(values: dict) -> tuple[float, float]:
+    """Proyecta el vector (ya transformado con el mismo preprocesador de
+    entrenamiento) a 2 componentes principales."""
+    import pandas as pd
+
     _, pca, scaler, _, _ = _load_models()
-    X = np.array(values, dtype=float).reshape(1, -1)
+    X = pd.DataFrame([values])
     if scaler is not None:
         X = scaler.transform(X)
     coords = pca.transform(X)[0]

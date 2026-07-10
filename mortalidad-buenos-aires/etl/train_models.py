@@ -22,9 +22,10 @@ from pathlib import Path
 import joblib
 import pandas as pd
 from sklearn.cluster import KMeans
+from sklearn.compose import ColumnTransformer
 from sklearn.decomposition import PCA
 from sklearn.metrics import silhouette_score
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 from etl.config import settings
 from etl.load.models_to_postgres import save_artifact
@@ -34,30 +35,38 @@ from etl.transform.feature_engineering import transformacion_manual
 
 logger = logging.getLogger(__name__)
 
-FEATURES = ["cie10_clasificacion", "Sexo", "grupo_edad", "anio", "cantidad"]
+FEATURES = ["supracategoria", "Sexo", "grupo_edad", "anio", "cantidad"]
 
 
-def _prepare_matrix(df: pd.DataFrame) -> tuple[pd.DataFrame, StandardScaler]:
+def _prepare_matrix(df: pd.DataFrame) -> tuple[pd.DataFrame, ColumnTransformer]:
     """Aplica transformación manual, selecciona las features y las
-    estandariza (media 0, varianza 1).
+    codifica/escala.
 
-    Sin este paso, ``cie10_clasificacion`` (LabelEncoder, rango ~0-1300)
-    domina por completo la distancia euclidiana frente a variables como
-    ``Sexo`` o ``grupo_edad`` (rango 0-4) o ``anio``/``cantidad`` (ya en
-    [0,1] por MinMaxScaler) — tanto KMeans como PCA quedan sesgados a esa
-    única columna. Se usa ``StandardScaler`` sobre las 5 features para que
-    todas pesen de forma comparable, igual que en ``notebooks/pca.ipynb``
-    y ``notebooks/clustering.ipynb``.
+    ``supracategoria`` (23 categorías nominales) se codifica con
+    ``OneHotEncoder`` en vez de un ``LabelEncoder``: un ``LabelEncoder``
+    asignaría un número arbitrario a cada capítulo CIE-10, y KMeans/PCA
+    interpretarían esa distancia numérica como si fuera real. Las demás
+    columnas ya vienen ordinal/MinMax-escaladas desde ``transformacion_manual``
+    y se re-escalan con ``StandardScaler`` para que pesen de forma comparable
+    frente a las columnas one-hot.
 
-    El ``scaler`` ajustado se devuelve (y se persiste) porque la API debe
-    aplicar exactamente la misma transformación a los vectores que llegan
-    por ``/ml/cluster`` y ``/ml/pca`` antes de pasarlos a los modelos.
+    El ``preprocessor`` ajustado se devuelve (y se persiste) porque la API
+    debe aplicar exactamente la misma transformación a los vectores que
+    llegan por ``/ml/cluster`` y ``/ml/pca`` antes de pasarlos a los modelos.
     """
     df_enc = transformacion_manual(df)
-    X = df_enc[FEATURES].copy()
-    scaler = StandardScaler()
-    X_scaled = pd.DataFrame(scaler.fit_transform(X), columns=FEATURES, index=X.index)
-    return X_scaled, scaler
+    #preprocessor escala cada columna de forma independiente
+    preprocessor = ColumnTransformer(
+        transformers=[
+            ("cat", OneHotEncoder(handle_unknown="ignore"), ["supracategoria"]),
+            ("num", StandardScaler(), ["Sexo", "grupo_edad", "anio", "cantidad"]),
+        ],
+        verbose_feature_names_out=False,
+    )
+    #------
+    X = preprocessor.fit_transform(df_enc[FEATURES])
+    X_scaled = pd.DataFrame(X, columns=preprocessor.get_feature_names_out(), index=df_enc.index) #get_feature_names_out es clave por el ONEHOTENCODER y las nuevas columnas
+    return X_scaled, preprocessor
 
 
 def _label_clusters(kmeans: KMeans, features: list[str]) -> dict[str, dict]:
@@ -170,7 +179,7 @@ def train_and_persist(model_dir: Path | None = None, push_to_db: bool = True) ->
 
     logger.info("Cargando dataset transformado vía ETL")
     df = run_etl(load_to_db=False)
-    X, scaler = _prepare_matrix(df)
+    X, preprocessor = _prepare_matrix(df)
     logger.info("Matriz de entrenamiento lista", extra={"shape": list(X.shape)})
 
     km_result = _train_kmeans(X)
@@ -188,7 +197,7 @@ def train_and_persist(model_dir: Path | None = None, push_to_db: bool = True) ->
     joblib.dump(km_result["model"], model_dir / "kmeans.joblib")
     joblib.dump(pca_result["model"], model_dir / "pca.joblib")
     joblib.dump(FEATURES, model_dir / "features.joblib")
-    joblib.dump(scaler, model_dir / "scaler.joblib")
+    joblib.dump(preprocessor, model_dir / "scaler.joblib")
     (model_dir / "metadata.json").write_text(
         json.dumps(metadata, indent=2, ensure_ascii=False), encoding="utf-8"
     )
@@ -199,7 +208,7 @@ def train_and_persist(model_dir: Path | None = None, push_to_db: bool = True) ->
             save_artifact("kmeans",   km_result["model"],  metadata={"kmeans":  metadata["kmeans"]})
             save_artifact("pca",      pca_result["model"], metadata={"pca":     metadata["pca"]})
             save_artifact("features", FEATURES,            metadata={"features": FEATURES})
-            save_artifact("scaler",   scaler,               metadata={})
+            save_artifact("scaler",   preprocessor,         metadata={})
             save_artifact("metadata", metadata,            metadata=metadata)
         except Exception:  # noqa: BLE001
             logger.exception("Fallo persistiendo modelos en Postgres (continuando)")

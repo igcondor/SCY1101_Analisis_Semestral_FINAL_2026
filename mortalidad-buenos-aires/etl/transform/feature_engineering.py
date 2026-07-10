@@ -92,13 +92,11 @@ def agregar_supracategoria(df: pd.DataFrame) -> pd.DataFrame:
 def transformacion_manual(df: pd.DataFrame) -> pd.DataFrame:
     """Encoding manual + escalado MinMax para clustering / PCA.
 
-    Se usa un ``LabelEncoder`` independiente por columna (bug histórico del
-    notebook original reusaba el mismo objeto, sobrescribiendo el fit).
+    ``supracategoria`` se deja como categoría sin codificar: se codifica
+    despues con ``OneHotEncoder`` (ver ``train_models._prepare_matrix``),
+    ya que es una variable nominal de 23 categorías
     """
     out = df.copy()
-
-    le_cie = LabelEncoder()
-    out["cie10_clasificacion"] = le_cie.fit_transform(out["cie10_clasificacion"])
 
     le_sexo = LabelEncoder()
     out["Sexo"] = le_sexo.fit_transform(out["Sexo"])
@@ -130,7 +128,7 @@ def transformacion_pipeline(df: pd.DataFrame):
     pipeline = ColumnTransformer(
         transformers=[
             ("cat", OneHotEncoder(handle_unknown="ignore"),
-             ["cie10_clasificacion", "Sexo", "grupo_edad"]),
+             ["supracategoria", "Sexo", "grupo_edad"]),
             ("num", StandardScaler(), ["anio", "cantidad"]),
         ]
     )
